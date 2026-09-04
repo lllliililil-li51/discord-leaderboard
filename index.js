@@ -27,19 +27,19 @@ async function parseLogChannelHistory() {
     try {
         const logChannel = await client.channels.fetch(LOG_CHANNEL_ID);
         if (!logChannel) {
-            console.error("Log channel not found!");
+            console.error("❌ Log channel not found! Check LOG_CHANNEL_ID.");
             return;
         }
         const messages = await logChannel.messages.fetch({ limit: 50 });
-        console.log(`Fetched ${messages.size} messages from log channel.`);
+        console.log(`📥 Fetched ${messages.size} messages from log channel.`);
         
         for (const msg of messages.values()) {
             await processMessageContent(msg);
         }
         await updateLeaderboard(client);
-        console.log("Initial history parsed successfully.");
+        console.log("✅ Initial history parsed successfully.");
     } catch (err) {
-        console.error("Error parsing history:", err);
+        console.error("❌ Error parsing history (Check channel permissions/ID):", err);
     }
 }
 
@@ -63,25 +63,25 @@ async function processMessageContent(message) {
     for (const text of texts) {
         const lines = text.split('\n');
         for (const line of lines) {
+            // Cleanly strip leading emojis, ranking numbers, and symbols like #4, 🥇, etc.
+            const cleanLine = line.replace(/^[🥇🥈🥉#\d\s]+/, '').trim();
+
+            const arrowMatch = cleanLine.match(/^([a-zA-Z\s]+?):\s*[\d,.]+\s*(?:->|→)\s*([\d,.]+)\s*Dials/i);
+            const standardMatch = cleanLine.match(/^([a-zA-Z\s]+?):\s*([\d,.]+)\s*Dials/i);
+
             let agentName = "";
             let dials = 0;
 
-            const cleanLine = line.replace(/^[^\w#]+/, '').trim();
-
-            const arrowMatch = cleanLine.match(/(?:#\d+\s*)?([a-zA-Z\s]+?):\s*[\d,.]+\s*(?:->|→)\s*([\d,.]+)\s*Dials/i);
             if (arrowMatch) {
                 agentName = arrowMatch[1].trim();
                 dials = parseFloat(arrowMatch[2].replace(/,/g, ''));
-            } else {
-                const standardMatch = cleanLine.match(/(?:#\d+\s*)?([a-zA-Z\s]+?):\s*([\d,.]+)\s*Dials/i);
-                if (standardMatch) {
-                    agentName = standardMatch[1].trim();
-                    dials = parseFloat(standardMatch[2].replace(/,/g, ''));
-                }
+            } else if (standardMatch) {
+                agentName = standardMatch[1].trim();
+                dials = parseFloat(standardMatch[2].replace(/,/g, ''));
             }
 
             if (agentName && !isNaN(dials)) {
-                console.log(`Matched -> Agent: ${agentName}, Dials: ${dials}`);
+                console.log(`✅ Matched -> Agent: ${agentName}, Dials: ${dials}`);
                 await Agent.findOneAndUpdate({ name: agentName }, { dials: dials }, { upsert: true });
             }
         }
@@ -121,7 +121,7 @@ async function updateLeaderboard(clientInstance) {
         const newMsg = await channel.send({ embeds: [embed] });
         masterMessageId = newMsg.id;
     } catch (err) {
-        console.error("Error updating leaderboard:", err);
+        console.error("❌ Error updating leaderboard:", err);
     }
 }
 
