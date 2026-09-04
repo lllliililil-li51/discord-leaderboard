@@ -48,12 +48,15 @@ function processMessageContent(message) {
         let agentName = "";
         let dials = 0;
 
-        const arrowMatch = line.match(/(?:#\d+\s*)?([a-zA-Z\s]+?):\s*[\d,.]+\s*(?:->|→)\s*([\d,.]+)\s*Dials/i);
+        // Strip leading emojis and symbols (like 🥇, 🥈, 🥉, 📈, etc.)
+        const cleanLine = line.replace(/^[^\w#]+/, '').trim();
+
+        const arrowMatch = cleanLine.match(/(?:#\d+\s*)?([a-zA-Z\s]+?):\s*[\d,.]+\s*(?:->|→)\s*([\d,.]+)\s*Dials/i);
         if (arrowMatch) {
             agentName = arrowMatch[1].trim();
             dials = parseFloat(arrowMatch[2].replace(/,/g, ''));
         } else {
-            const standardMatch = line.match(/(?:#\d+\s*)?([a-zA-Z\s]+?):\s*([\d,.]+)\s*Dials/i);
+            const standardMatch = cleanLine.match(/(?:#\d+\s*)?([a-zA-Z\s]+?):\s*([\d,.]+)\s*Dials/i);
             if (standardMatch) {
                 agentName = standardMatch[1].trim();
                 dials = parseFloat(standardMatch[2].replace(/,/g, ''));
