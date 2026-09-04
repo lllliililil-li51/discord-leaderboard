@@ -34,7 +34,7 @@ async function parseLogChannelHistory() {
         console.log(`Fetched ${messages.size} messages from log channel.`);
         
         for (const msg of messages.values()) {
-            processMessageContent(msg);
+            await processMessageContent(msg);
         }
         await updateLeaderboard(client);
         console.log("Initial history parsed successfully.");
@@ -43,7 +43,7 @@ async function parseLogChannelHistory() {
     }
 }
 
-function processMessageContent(message) {
+async function processMessageContent(message) {
     let texts = [];
     if (message.content) texts.push(message.content);
     if (message.embeds && message.embeds.length > 0) {
@@ -82,7 +82,7 @@ function processMessageContent(message) {
 
             if (agentName && !isNaN(dials)) {
                 console.log(`Matched -> Agent: ${agentName}, Dials: ${dials}`);
-                Agent.findOneAndUpdate({ name: agentName }, { dials: dials }, { upsert: true }).exec();
+                await Agent.findOneAndUpdate({ name: agentName }, { dials: dials }, { upsert: true });
             }
         }
     }
@@ -90,7 +90,7 @@ function processMessageContent(message) {
 
 client.on('messageCreate', async (message) => {
     if (message.channelId !== LOG_CHANNEL_ID) return;
-    processMessageContent(message);
+    await processMessageContent(message);
     await updateLeaderboard(message.client);
 });
 
