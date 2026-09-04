@@ -19,7 +19,7 @@ const LEADERBOARD_CHANNEL_ID = process.env.LEADERBOARD_CHANNEL_ID;
 let masterMessageId = null; 
 
 client.once('ready', async () => {
-    console.log(`Logged in as ${client.user.tag}!`);
+    console.log(`Logged in as ${client.user.tag}! Starting diagnostic scan...`);
     await parseLogChannelHistory();
 });
 
@@ -37,9 +37,9 @@ async function parseLogChannelHistory() {
             await processMessageContent(msg);
         }
         await updateLeaderboard(client);
-        console.log("✅ Initial history parsed successfully.");
+        console.log("✅ Diagnostic history scan complete.");
     } catch (err) {
-        console.error("❌ Error parsing history:", err);
+        console.error("❌ Error in history scan:", err);
     }
 }
 
@@ -63,18 +63,24 @@ async function processMessageContent(message) {
     for (const text of texts) {
         const lines = text.split('\n');
         for (const line of lines) {
-            // Universal regex: bypasses all leading emojis, rankings (#4, 🥇, 📈), 
-            // and handles both normal and arrow/update stats seamlessly.
-            const match = line.match(/([a-zA-Z][a-zA-Z\s]*?):\s*(?:[\d,.]+\s*(?:->|→)\s*)?([\d,.]+)\s*Dials/i);
+            console.log(`🔍 Raw Line: "${line}"`);
+
+            // Strip leading emojis, symbols, rankings (#4, 🥇, 🥈, 🥉, 📈, etc.)
+            const cleanLine = line.replace(/^[🥇🥈🥉📈#\d\.\s]+/u, '').trim();
+            console.log(`🧹 Cleaned Line: "${cleanLine}"`);
+
+            // Match format: AgentName: [optional old ->] new Dials
+            const match = cleanLine.match(/^([a-zA-Z\s]+?):\s*(?:[\d,.]+\s*(?:->|→)\s*)?([\d,.]+)\s*Dials/i);
 
             if (match) {
                 const agentName = match[1].trim();
                 const dials = parseFloat(match[2].replace(/,/g, ''));
-
+                console.log(`✅ MATCH FOUND! Agent: "${agentName}" | Dials: ${dials}`);
                 if (agentName && !isNaN(dials)) {
-                    console.log(`✅ Matched -> Agent: ${agentName}, Dials: ${dials}`);
                     await Agent.findOneAndUpdate({ name: agentName }, { dials: dials }, { upsert: true });
                 }
+            } else {
+                console.log(`❌ NO MATCH for line: "${cleanLine}"`);
             }
         }
     }
@@ -90,6 +96,7 @@ async function updateLeaderboard(clientInstance) {
     try {
         const channel = await clientInstance.channels.fetch(LEADERBOARD_CHANNEL_ID);
         const agents = await Agent.find().sort({ dials: -1 });
+        console.log(`📊 Agents currently in MongoDB:`, agents);
 
         let boardText = "";
         agents.forEach((a, i) => {
@@ -103,6 +110,7 @@ async function updateLeaderboard(clientInstance) {
             .setColor(0xFEE75C)
             .setTimestamp();
 
+Expanded:
         if (masterMessageId) {
             try {
                 const msg = await channel.messages.fetch(masterMessageId);
