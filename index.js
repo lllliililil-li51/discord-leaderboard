@@ -26,8 +26,12 @@ client.once('ready', async () => {
 async function parseLogChannelHistory() {
     try {
         const logChannel = await client.channels.fetch(LOG_CHANNEL_ID);
-        if (!logChannel) return;
-        const messages = await logChannel.messages.fetch({ limit: 100 });
+        if (!logChannel) {
+            console.error("Log channel not found!");
+            return;
+        }
+        const messages = await logChannel.messages.fetch({ limit: 50 });
+        console.log(`Fetched ${messages.size} messages from log channel.`);
         
         for (const msg of messages.values()) {
             processMessageContent(msg);
@@ -40,31 +44,46 @@ async function parseLogChannelHistory() {
 }
 
 function processMessageContent(message) {
-    const text = message.embeds[0]?.description || message.embeds[0]?.title || message.content;
-    if (!text) return;
-
-    const lines = text.split('\n');
-    for (const line of lines) {
-        let agentName = "";
-        let dials = 0;
-
-        // Strip leading emojis and symbols (like 🥇, 🥈, 🥉, 📈, etc.)
-        const cleanLine = line.replace(/^[^\w#]+/, '').trim();
-
-        const arrowMatch = cleanLine.match(/(?:#\d+\s*)?([a-zA-Z\s]+?):\s*[\d,.]+\s*(?:->|→)\s*([\d,.]+)\s*Dials/i);
-        if (arrowMatch) {
-            agentName = arrowMatch[1].trim();
-            dials = parseFloat(arrowMatch[2].replace(/,/g, ''));
-        } else {
-            const standardMatch = cleanLine.match(/(?:#\d+\s*)?([a-zA-Z\s]+?):\s*([\d,.]+)\s*Dials/i);
-            if (standardMatch) {
-                agentName = standardMatch[1].trim();
-                dials = parseFloat(standardMatch[2].replace(/,/g, ''));
-            }
+    let texts = [];
+    if (message.content) texts.push(message.content);
+    if (message.embeds && message.embeds.length > 0) {
+        const embed = message.embeds[0];
+        if (embed.title) texts.push(embed.title);
+        if (embed.description) texts.push(embed.description);
+        if (embed.fields && embed.fields.length > 0) {
+            embed.fields.forEach(f => {
+                if (f.name) texts.push(f.name);
+                if (f.value) texts.push(f.value);
+            });
         }
+    }
 
-        if (agentName && !isNaN(dials)) {
-            Agent.findOneAndUpdate({ name: agentName }, { dials: dials }, { upsert: true }).exec();
+    if (texts.length === 0) return;
+
+    for (const text of texts) {
+        const lines = text.split('\n');
+        for (const line of lines) {
+            let agentName = "";
+            let dials = 0;
+
+            const cleanLine = line.replace(/^[^\w#]+/, '').trim();
+
+            const arrowMatch = cleanLine.match(/(?:#\d+\s*)?([a-zA-Z\s]+?):\s*[\d,.]+\s*(?:->|→)\s*([\d,.]+)\s*Dials/i);
+            if (arrowMatch) {
+                agentName = arrowMatch[1].trim();
+                dials = parseFloat(arrowMatch[2].replace(/,/g, ''));
+            } else {
+                const standardMatch = cleanLine.match(/(?:#\d+\s*)?([a-zA-Z\s]+?):\s*([\d,.]+)\s*Dials/i);
+                if (standardMatch) {
+                    agentName = standardMatch[1].trim();
+                    dials = parseFloat(standardMatch[2].replace(/,/g, ''));
+                }
+            }
+
+            if (agentName && !isNaN(dials)) {
+                console.log(`Matched -> Agent: ${agentName}, Dials: ${dials}`);
+                Agent.findOneAndUpdate({ name: agentName }, { dials: dials }, { upsert: true }).exec();
+            }
         }
     }
 }
