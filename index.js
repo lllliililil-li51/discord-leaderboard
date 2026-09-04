@@ -8,7 +8,7 @@ app.get('/', (req, res) => res.send('Bot running'));
 app.listen(process.env.PORT || 3000);
 
 mongoose.connect(process.env.MONGO_URI);
-const Agent = mongoose.model('Agent', new mongoose.Schema({ name: String, dials: Number, pkr: Number }));
+const Agent = mongoose.model('Agent', new mongoose.Schema({ name: String, dials: Number }));
 
 const client = new Client({ 
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] 
@@ -18,23 +18,57 @@ const LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID;
 const LEADERBOARD_CHANNEL_ID = process.env.LEADERBOARD_CHANNEL_ID; 
 let masterMessageId = null; 
 
-client.once('ready', () => {
+client.once('ready', async () => {
     console.log(`Logged in as ${client.user.tag}!`);
+    await parseLogChannelHistory();
 });
+
+async function parseLogChannelHistory() {
+    try {
+        const logChannel = await client.channels.fetch(LOG_CHANNEL_ID);
+        if (!logChannel) return;
+        const messages = await logChannel.messages.fetch({ limit: 100 });
+        
+        for (const msg of messages.values()) {
+            processMessageContent(msg);
+        }
+        await updateLeaderboard(client);
+        console.log("Initial history parsed successfully.");
+    } catch (err) {
+        console.error("Error parsing history:", err);
+    }
+}
+
+function processMessageContent(message) {
+    const text = message.embeds[0]?.description || message.embeds[0]?.title || message.content;
+    if (!text) return;
+
+    const lines = text.split('\n');
+    for (const line of lines) {
+        let agentName = "";
+        let dials = 0;
+
+        const arrowMatch = line.match(/(?:#\d+\s*)?([a-zA-Z\s]+?):\s*[\d,.]+\s*(?:->|→)\s*([\d,.]+)\s*Dials/i);
+        if (arrowMatch) {
+            agentName = arrowMatch[1].trim();
+            dials = parseFloat(arrowMatch[2].replace(/,/g, ''));
+        } else {
+            const standardMatch = line.match(/(?:#\d+\s*)?([a-zA-Z\s]+?):\s*([\d,.]+)\s*Dials/i);
+            if (standardMatch) {
+                agentName = standardMatch[1].trim();
+                dials = parseFloat(standardMatch[2].replace(/,/g, ''));
+            }
+        }
+
+        if (agentName && !isNaN(dials)) {
+            Agent.findOneAndUpdate({ name: agentName }, { dials: dials }, { upsert: true }).exec();
+        }
+    }
+}
 
 client.on('messageCreate', async (message) => {
     if (message.channelId !== LOG_CHANNEL_ID) return;
-    
-    const text = message.embeds[0]?.description || message.content;
-    if (!text) return;
-
-    const match = text.match(/([a-zA-Z\s]+):\s*([\d,.]+)\s*Dials/);
-    if (!match) return;
-
-    const agentName = match[1].trim();
-    const dials = parseFloat(match[2].replace(/,/g, ''));
-    
-    await Agent.findOneAndUpdate({ name: agentName }, { dials: dials }, { upsert: true });
+    processMessageContent(message);
     await updateLeaderboard(message.client);
 });
 
@@ -50,9 +84,10 @@ async function updateLeaderboard(clientInstance) {
         });
 
         const embed = new EmbedBuilder()
-            .setTitle('🏆 Master Leaderboard')
+            .setTitle('🏆 Master Live Leaderboard')
             .setDescription(boardText || "No data yet.")
-            .setColor(0xFEE75C);
+            .setColor(0xFEE75C)
+            .setTimestamp();
 
         if (masterMessageId) {
             try {
