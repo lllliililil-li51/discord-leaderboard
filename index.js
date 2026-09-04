@@ -63,14 +63,10 @@ async function processMessageContent(message) {
     for (const text of texts) {
         const lines = text.split('\n');
         for (const line of lines) {
-            console.log(`🔍 Raw Line: "${line}"`);
+            // Strip leading emojis, rankings, and remove markdown bold asterisks (**) and special arrows (➔, →, ->)
+            let cleanLine = line.replace(/^[🥇🥈🥉📈#\d\.\s]+/u, '').replace(/\*\*/g, '').trim();
 
-            // Strip leading emojis, symbols, rankings (#4, 🥇, 🥈, 🥉, 📈, etc.)
-            const cleanLine = line.replace(/^[🥇🥈🥉📈#\d\.\s]+/u, '').trim();
-            console.log(`🧹 Cleaned Line: "${cleanLine}"`);
-
-            // Match format: AgentName: [optional old ->] new Dials
-            const match = cleanLine.match(/^([a-zA-Z\s]+?):\s*(?:[\d,.]+\s*(?:->|→)\s*)?([\d,.]+)\s*Dials/i);
+            const match = cleanLine.match(/^([a-zA-Z\s]+?):\s*(?:[\d,.]+\s*(?:->|→|➔)\s*)?([\d,.]+)\s*Dials/i);
 
             if (match) {
                 const agentName = match[1].trim();
@@ -79,8 +75,6 @@ async function processMessageContent(message) {
                 if (agentName && !isNaN(dials)) {
                     await Agent.findOneAndUpdate({ name: agentName }, { dials: dials }, { upsert: true });
                 }
-            } else {
-                console.log(`❌ NO MATCH for line: "${cleanLine}"`);
             }
         }
     }
@@ -110,7 +104,6 @@ async function updateLeaderboard(clientInstance) {
             .setColor(0xFEE75C)
             .setTimestamp();
 
-Expanded:
         if (masterMessageId) {
             try {
                 const msg = await channel.messages.fetch(masterMessageId);
