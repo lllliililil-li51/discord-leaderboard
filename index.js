@@ -27,7 +27,7 @@ async function parseLogChannelHistory() {
     try {
         const logChannel = await client.channels.fetch(LOG_CHANNEL_ID);
         if (!logChannel) {
-            console.error("❌ Log channel not found! Check LOG_CHANNEL_ID.");
+            console.error("❌ Log channel not found!");
             return;
         }
         const messages = await logChannel.messages.fetch({ limit: 50 });
@@ -39,7 +39,7 @@ async function parseLogChannelHistory() {
         await updateLeaderboard(client);
         console.log("✅ Initial history parsed successfully.");
     } catch (err) {
-        console.error("❌ Error parsing history (Check channel permissions/ID):", err);
+        console.error("❌ Error parsing history:", err);
     }
 }
 
@@ -63,26 +63,18 @@ async function processMessageContent(message) {
     for (const text of texts) {
         const lines = text.split('\n');
         for (const line of lines) {
-            // Cleanly strip leading emojis, ranking numbers, and symbols like #4, 🥇, etc.
-            const cleanLine = line.replace(/^[🥇🥈🥉#\d\s]+/, '').trim();
+            // Universal regex: bypasses all leading emojis, rankings (#4, 🥇, 📈), 
+            // and handles both normal and arrow/update stats seamlessly.
+            const match = line.match(/([a-zA-Z][a-zA-Z\s]*?):\s*(?:[\d,.]+\s*(?:->|→)\s*)?([\d,.]+)\s*Dials/i);
 
-            const arrowMatch = cleanLine.match(/^([a-zA-Z\s]+?):\s*[\d,.]+\s*(?:->|→)\s*([\d,.]+)\s*Dials/i);
-            const standardMatch = cleanLine.match(/^([a-zA-Z\s]+?):\s*([\d,.]+)\s*Dials/i);
+            if (match) {
+                const agentName = match[1].trim();
+                const dials = parseFloat(match[2].replace(/,/g, ''));
 
-            let agentName = "";
-            let dials = 0;
-
-            if (arrowMatch) {
-                agentName = arrowMatch[1].trim();
-                dials = parseFloat(arrowMatch[2].replace(/,/g, ''));
-            } else if (standardMatch) {
-                agentName = standardMatch[1].trim();
-                dials = parseFloat(standardMatch[2].replace(/,/g, ''));
-            }
-
-            if (agentName && !isNaN(dials)) {
-                console.log(`✅ Matched -> Agent: ${agentName}, Dials: ${dials}`);
-                await Agent.findOneAndUpdate({ name: agentName }, { dials: dials }, { upsert: true });
+                if (agentName && !isNaN(dials)) {
+                    console.log(`✅ Matched -> Agent: ${agentName}, Dials: ${dials}`);
+                    await Agent.findOneAndUpdate({ name: agentName }, { dials: dials }, { upsert: true });
+                }
             }
         }
     }
